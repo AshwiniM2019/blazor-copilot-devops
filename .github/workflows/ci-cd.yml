@@ -55,6 +55,10 @@ jobs:
     environment: staging # Requires manual approval in GitHub Settings > Environments
     steps:
       - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
       - name: Publish Blazor App
         run: dotnet publish TaskTracker.Web/TaskTracker.Web.csproj -c Release -o ./publish
       - name: Deploy Placeholder
