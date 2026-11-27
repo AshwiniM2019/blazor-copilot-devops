@@ -1,136 +1,61 @@
-name: CI/CD Pipeline
+name: Blazor CI/CD
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
-    name: Build Blazor Solution
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '9.0.x'
 
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build solution
-        run: dotnet build --configuration Release --no-restore
-
-  test:
-    runs-on: ubuntu-latest
-    name: Run Tests & Coverage
-    needs: build
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Run tests with TRX and coverage
-        run: >
-          dotnet test 
-          --configuration Release 
-          --no-restore
-          --no-build
-          --logger "trx;LogFileName=test-results.trx"
-          --collect:"XPlat Code Coverage"
-          --results-directory ./test-results
-
-      - name: Convert coverage to Cobertura format
+      - name: Restore & Build
         run: |
-          if [ -f ./test-results/coverage.cobertura.xml ]; then
-            echo "Coverage report found"
-          else
-            echo "Warning: Coverage file not found, creating placeholder"
-            mkdir -p ./test-results
-          fi
+          dotnet restore
+          dotnet build --configuration Release --no-restore
 
-      - name: Publish test results (PR comment)
-        if: always() && github.event_name == 'pull_request'
+      - name: Run Unit & bUnit Tests
+        run: |
+          dotnet test --configuration Release --no-build \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish Test Report to PR
         uses: dorny/test-reporter@v1
-        with:
-          name: Test Results
-          path: './test-results/*.trx'
-          reporter: 'dotnet-trx'
-          fail-on-error: false
-
-      - name: Publish code coverage
         if: always()
-        uses: codecov/codecov-action@v4
         with:
-          files: ./test-results/coverage.cobertura.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-          verbose: true
+          name: Blazor xUnit & bUnit Results
+          path: '**/*.trx'
+          reporter: dotnet-trx
 
-      - name: Upload TRX artifacts
-        if: always()
+      - name: Upload Test & Coverage Artifacts
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: test-results-trx
-          path: ./test-results/*.trx
-          retention-days: 30
+          name: blazor-test-results
+          path: '**/TestResults/**'
 
-      - name: Fail if tests failed
-        if: failure()
-        run: exit 1
-
-  deploy:
-    runs-on: ubuntu-latest
-    name: Deploy to Staging
-    needs: test
+  deploy-staging:
+    needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment:
-      name: staging
-      url: https://staging.example.com
-
+    runs-on: ubuntu-latest
+    environment: staging # Requires manual approval in GitHub Settings > Environments
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build for deployment
-        run: dotnet build --configuration Release --no-restore
-
-      - name: Publish application
-        run: >
-          dotnet publish TaskTracker.Web/TaskTracker.Web.csproj
-          --configuration Release
-          --output ./publish
-          --no-restore
-          --no-build
-
-      - name: Deploy to staging
-        run: |
-          echo "Deploying to staging environment..."
-          echo "Deployment would occur here (e.g., Docker push, SSH deploy, Azure deploy)"
-          # Example: docker build and push
-          # docker build -t myregistry.azurecr.io/tasktracker:${{ github.sha }} .
-          # docker push myregistry.azurecr.io/tasktracker:${{ github.sha }}
+      - uses: actions/checkout@v4
+      - name: Publish Blazor App
+        run: dotnet publish TaskTracker.Web/TaskTracker.Web.csproj -c Release -o ./publish
+      - name: Deploy Placeholder
+        run: echo "Deploying ./publish to Azure App Service..."
