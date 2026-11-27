@@ -1,0 +1,65 @@
+name: Blazor CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore & Build
+        run: |
+          dotnet restore
+          dotnet build --configuration Release --no-restore
+
+      - name: Run Unit & bUnit Tests
+        run: |
+          dotnet test --configuration Release --no-build \
+            --collect:"XPlat Code Coverage" \
+            --logger "trx;LogFileName=test-results.trx"
+
+      - name: Publish Test Report to PR
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Blazor xUnit & bUnit Results
+          path: '**/*.trx'
+          reporter: dotnet-trx
+
+      - name: Upload Test & Coverage Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blazor-test-results
+          path: '**/TestResults/**'
+
+  deploy-staging:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging # Requires manual approval in GitHub Settings > Environments
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish Blazor App
+        run: dotnet publish TaskTracker.Web/TaskTracker.Web.csproj -c Release -o ./publish
+      - name: Deploy Placeholder
+        run: echo "Deploying ./publish to Azure App Service..."
