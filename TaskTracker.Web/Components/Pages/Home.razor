@@ -12,7 +12,7 @@
             <input @bind="_newTitle" placeholder="New task title..." class="form-control" />
         </div>
         <div class="col-auto">
-            <select @bind="_selectedPriority" class="form-select">
+            <select @bind="_selectedPriority" class="form-select" aria-label="Task priority">
                 <option value="@TaskPriority.Low">Low</option>
                 <option value="@TaskPriority.Medium">Medium</option>
                 <option value="@TaskPriority.High">High</option>
